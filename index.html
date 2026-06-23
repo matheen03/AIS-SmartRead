@@ -15,6 +15,13 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
     <script>
+        // Suppress benign ResizeObserver warnings globally
+        window.addEventListener('error', function(e) {
+            if (e.message === 'ResizeObserver loop limit exceeded' || e.message === 'ResizeObserver loop completed with undelivered notifications.') {
+                e.stopImmediatePropagation();
+            }
+        });
+
         tailwind.config = {
             theme: {
                 extend: {
@@ -123,7 +130,14 @@
     <!-- Header -->
     <header class="bg-white border-b border-arxiv-border h-20 flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
         <div class="flex items-center gap-3">
-            <img src="download.jpeg" alt="AIS Logo" class="h-14 w-auto rounded-md shadow-sm">
+            <div class="relative h-14 w-14 shrink-0">
+                <!-- The local image will show when downloaded and placed next to download.jpeg -->
+                <img src="download.jpeg" alt="AIS Logo" class="w-full h-full object-contain rounded-md shadow-sm" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden'); this.nextElementSibling.classList.add('flex');">
+                <!-- Fallback icon for the cloud preview where the local file isn't available -->
+                <div class="hidden w-full h-full bg-arxiv-blue text-white rounded-md items-center justify-center shadow-sm">
+                    <i class="ph ph-globe-hemisphere-west text-3xl"></i>
+                </div>
+            </div>
             <div class="flex flex-col justify-center">
                 <div class="flex items-baseline">
                     <span class="text-4xl font-creative text-arxiv-blue tracking-wider font-bold">AIS</span>
@@ -170,17 +184,9 @@
 
             <div class="p-4 border-t border-arxiv-border bg-gray-50 flex flex-col gap-2" id="tools-section" style="opacity: 0.5; pointer-events: none;">
                 <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Generative Tools</h2>
-                <button onclick="generateMindMap()" class="w-full flex items-center gap-3 bg-white border border-gray-200 hover:border-arxiv-red hover:text-arxiv-red py-2 px-3 rounded-md transition-colors text-sm font-medium shadow-sm text-gray-700 text-left">
-                    <div class="bg-blue-100 p-1.5 rounded text-blue-600"><i class="ph ph-graph text-lg"></i></div>
-                    Concept Mind Map
-                </button>
-                <button onclick="generatePresentation()" class="w-full flex items-center gap-3 bg-white border border-gray-200 hover:border-arxiv-red hover:text-arxiv-red py-2 px-3 rounded-md transition-colors text-sm font-medium shadow-sm text-gray-700 text-left">
-                    <div class="bg-green-100 p-1.5 rounded text-green-600"><i class="ph ph-presentation-chart text-lg"></i></div>
-                    Create Presentation
-                </button>
-                <button onclick="generateELI5()" class="w-full flex items-center gap-3 bg-white border border-gray-200 hover:border-arxiv-red hover:text-arxiv-red py-2 px-3 rounded-md transition-colors text-sm font-medium shadow-sm text-gray-700 text-left">
+                <button onclick="generateSummary()" class="w-full flex items-center gap-3 bg-white border border-gray-200 hover:border-arxiv-red hover:text-arxiv-red py-2 px-3 rounded-md transition-colors text-sm font-medium shadow-sm text-gray-700 text-left">
                     <div class="bg-yellow-100 p-1 rounded text-yellow-600 text-lg">✨</div>
-                    ELI5 Summary
+                    Quick Summary
                 </button>
                 <button onclick="generateQuiz()" class="w-full flex items-center gap-3 bg-white border border-gray-200 hover:border-arxiv-red hover:text-arxiv-red py-2 px-3 rounded-md transition-colors text-sm font-medium shadow-sm text-gray-700 text-left">
                     <div class="bg-purple-100 p-1 rounded text-purple-600 text-lg">✨</div>
@@ -252,73 +258,19 @@
         </aside>
     </div>
 
-    <!-- Mind Map Modal -->
-    <div id="mindmap-modal" class="modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl w-11/12 max-w-5xl h-[80vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-300" id="mindmap-dialog">
-            <div class="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-gray-50">
-                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="ph ph-graph text-arxiv-red"></i> Concept Mind Map</h3>
-                <button onclick="closeModal('mindmap-modal')" class="text-gray-400 hover:text-gray-700"><i class="ph ph-x text-xl"></i></button>
-            </div>
-            <div class="flex-1 relative">
-                <div id="mindmap-network" class="w-full h-full bg-[#fafafa]"></div>
-                <div id="mindmap-loading" class="absolute inset-0 bg-white/90 flex flex-col items-center justify-center z-10">
-                    <div class="spinner w-12 h-12 mb-4"></div>
-                    <p class="text-gray-600 font-medium animate-pulse">Analyzing paper and generating mind map...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Presentation Modal -->
-    <div id="presentation-modal" class="modal-overlay">
-        <div class="bg-gray-900 rounded-xl shadow-2xl w-11/12 max-w-4xl h-[75vh] flex flex-col overflow-hidden text-white" id="presentation-dialog">
-            <div class="h-12 border-b border-gray-700 flex items-center justify-between px-4 bg-gray-800">
-                <h3 class="text-sm font-semibold flex items-center gap-2 text-gray-300"><i class="ph ph-presentation-chart"></i> Paper Summary</h3>
-                <button onclick="closeModal('presentation-modal')" class="text-gray-400 hover:text-white"><i class="ph ph-x text-lg"></i></button>
-            </div>
-            <div class="flex-1 relative flex items-center justify-center p-8 bg-black">
-                
-                <div id="slide-viewer" class="w-full max-w-3xl aspect-[16/9] bg-white text-gray-900 rounded-lg shadow-2xl p-10 flex flex-col relative overflow-hidden hidden">
-                    <div class="absolute top-0 left-0 w-full h-2 bg-arxiv-red"></div>
-                    <div class="absolute top-4 right-6 text-xs text-gray-400 font-serif">archive LLM Presentation</div>
-                    <h2 id="slide-title" class="text-3xl font-bold text-gray-900 mb-8 border-b pb-4 serif-text">Slide Title</h2>
-                    <ul id="slide-content" class="text-xl space-y-4 text-gray-700 flex-1 list-disc pl-6 marker:text-arxiv-red">
-                        <!-- Content goes here -->
-                    </ul>
-                    <div class="mt-auto flex justify-between items-center pt-4 border-t border-gray-100">
-                        <span id="slide-counter" class="text-sm font-medium text-gray-400">1 / 5</span>
-                    </div>
-                </div>
-
-                <div id="presentation-loading" class="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center z-10">
-                    <div class="spinner w-12 h-12 mb-4 border-t-white border-[rgba(255,255,255,0.2)]"></div>
-                    <p class="text-gray-300 font-medium animate-pulse">Drafting presentation slides...</p>
-                </div>
-            </div>
-            
-            <div class="h-16 bg-gray-800 border-t border-gray-700 flex items-center justify-center gap-6">
-                <button onclick="changeSlide(-1)" class="p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" id="btn-prev-slide"><i class="ph ph-arrow-left text-xl"></i></button>
-                <div class="flex gap-2" id="slide-dots">
-                    <!-- Dots -->
-                </div>
-                <button onclick="changeSlide(1)" class="p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors" id="btn-next-slide"><i class="ph ph-arrow-right text-xl"></i></button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ELI5 Modal -->
-    <div id="eli5-modal" class="modal-overlay">
-        <div class="bg-white rounded-xl shadow-2xl w-11/12 max-w-2xl h-[80vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-300" id="eli5-dialog">
+    <!-- Summary Modal -->
+    <div id="summary-modal" class="modal-overlay">
+        <div class="bg-white rounded-xl shadow-2xl w-11/12 max-w-2xl h-[80vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-300" id="summary-dialog">
             <div class="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-gray-50 shrink-0">
-                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">✨ Explain Like I'm 5</h3>
-                <button onclick="closeModal('eli5-modal')" class="text-gray-400 hover:text-gray-700"><i class="ph ph-x text-xl"></i></button>
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">✨ Quick Summary</h3>
+                <button onclick="closeModal('summary-modal')" class="text-gray-400 hover:text-gray-700"><i class="ph ph-x text-xl"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto p-8 relative">
-                <div id="eli5-loading" class="absolute inset-0 bg-white/90 flex flex-col items-center justify-center z-10 hidden">
+                <div id="summary-loading" class="absolute inset-0 bg-white/90 flex flex-col items-center justify-center z-10 hidden">
                     <div class="spinner w-10 h-10 mb-4"></div>
-                    <p class="text-gray-600 font-medium animate-pulse">Simplifying complex concepts...</p>
+                    <p class="text-gray-600 font-medium animate-pulse">Drafting summary...</p>
                 </div>
-                <div id="eli5-content" class="prose prose-sm max-w-none text-gray-800"></div>
+                <div id="summary-content" class="prose prose-sm max-w-none text-gray-800"></div>
             </div>
         </div>
     </div>
@@ -741,234 +693,20 @@ ${docText}`;
             document.getElementById(id).children[0].classList.replace('scale-100', 'scale-95');
         }
 
-        // --- Mind Map Generation ---
-        async function generateMindMap() {
+        // --- Summary Generation ---
+        async function generateSummary() {
             if (appState.currentDocIndex === -1) return;
             
-            openModal('mindmap-modal');
-            const loading = document.getElementById('mindmap-loading');
-            const networkContainer = document.getElementById('mindmap-network');
-            loading.classList.remove('hidden');
-            networkContainer.innerHTML = ''; // Clear old
-
-            try {
-                const docText = appState.documents[appState.currentDocIndex].text;
-                
-                const prompt = `Analyze this research paper and extract a conceptual mind map.
-Identify the core themes, methodologies, findings, and concepts.
-Return the output STRICTLY as a JSON object with 'nodes' and 'edges' arrays.
-Requirements:
-1. Max 20 nodes to keep it legible.
-2. The root node (ID: 1) should be the main topic.
-3. Edges connect nodes to show relationships.
-Document Text:
-${docText.substring(0, 100000)} // truncate to save some tokens if extremely large, though flash handles 1M`;
-
-                const schema = {
-                    type: "OBJECT",
-                    properties: {
-                        nodes: {
-                            type: "ARRAY",
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    id: { type: "INTEGER" },
-                                    label: { type: "STRING" },
-                                    title: { type: "STRING", description: "A slightly longer description for tooltip" }
-                                }
-                            }
-                        },
-                        edges: {
-                            type: "ARRAY",
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    from: { type: "INTEGER" },
-                                    to: { type: "INTEGER" },
-                                    label: { type: "STRING", description: "Relationship, e.g., 'uses', 'results in'" }
-                                }
-                            }
-                        }
-                    }
-                };
-
-                const payload = {
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { responseSchema: schema }
-                };
-
-                const result = await fetchGemini(payload, true);
-                const jsonText = result.candidates[0].content.parts[0].text;
-                const graphData = JSON.parse(jsonText);
-                
-                // Add robust fallbacks in case JSON doesn't exactly match structure
-                const nodesArr = graphData.nodes || [];
-                const edgesArr = graphData.edges || [];
-
-                // Add visual styling to nodes based on centrality
-                const nodes = new vis.DataSet(nodesArr.map(n => ({
-                    ...n,
-                    shape: n.id === 1 ? 'box' : 'dot',
-                    size: n.id === 1 ? 20 : 15,
-                    color: n.id === 1 ? '#B31B1B' : '#4b5563',
-                    font: { color: n.id === 1 ? 'white' : '#374151', face: 'Inter', size: n.id === 1 ? 16 : 14 }
-                })));
-                
-                const edges = new vis.DataSet(edgesArr.map(e => ({
-                    ...e,
-                    arrows: 'to',
-                    color: { color: '#cbd5e1' },
-                    font: { size: 10, align: 'middle', color: '#94a3b8' }
-                })));
-
-                const options = {
-                    physics: {
-                        barnesHut: { gravitationalConstant: -30000, centralGravity: 0.3 }
-                    },
-                    interaction: { hover: true, tooltipDelay: 200 }
-                };
-
-                loading.classList.add('hidden');
-                new vis.Network(networkContainer, { nodes, edges }, options);
-
-            } catch (err) {
-                console.error(err);
-                loading.innerHTML = `<div class="text-red-500 flex flex-col items-center gap-2"><i class="ph ph-warning-circle text-4xl"></i><p>Failed to generate mind map.</p><p class="text-xs text-gray-500">${err.message}</p></div>`;
-            }
-        }
-
-        // --- Presentation Generation ---
-        let currentSlides = [];
-        let currentSlideIndex = 0;
-
-        async function generatePresentation() {
-            if (appState.currentDocIndex === -1) return;
-            
-            openModal('presentation-modal');
-            const loading = document.getElementById('presentation-loading');
-            const viewer = document.getElementById('slide-viewer');
-            loading.classList.remove('hidden');
-            viewer.classList.add('hidden');
-            
-            try {
-                const docText = appState.documents[appState.currentDocIndex].text;
-                
-                const prompt = `Create a minimalistic, multi-slide presentation summary of this research paper.
-Return the output STRICTLY as JSON.
-Create 5 to 7 slides covering: Title/Intro, Core Problem, Methodology, Key Findings, and Conclusion.
-Document Text:
-${docText.substring(0, 100000)}`;
-
-                const schema = {
-                    type: "OBJECT",
-                    properties: {
-                        slides: {
-                            type: "ARRAY",
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    title: { type: "STRING" },
-                                    content: { type: "ARRAY", items: { type: "STRING" }, description: "Bullet points for the slide" }
-                                }
-                            }
-                        }
-                    }
-                };
-
-                const payload = {
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { responseSchema: schema }
-                };
-
-                const result = await fetchGemini(payload, true);
-                const jsonText = result.candidates[0].content.parts[0].text;
-                
-                // Add robust fallback empty array
-                currentSlides = JSON.parse(jsonText).slides || [];
-                currentSlideIndex = 0;
-
-                loading.classList.add('hidden');
-                viewer.classList.remove('hidden');
-                
-                buildSlideDots();
-                renderSlide();
-
-            } catch (err) {
-                console.error(err);
-                loading.innerHTML = `<div class="text-red-500 flex flex-col items-center gap-2"><i class="ph ph-warning-circle text-4xl"></i><p>Failed to generate presentation.</p><p class="text-xs text-gray-500">${err.message}</p></div>`;
-            }
-        }
-
-        function renderSlide() {
-            if (!currentSlides || currentSlides.length === 0) return;
-            const slide = currentSlides[currentSlideIndex];
-            
-            const titleEl = document.getElementById('slide-title');
-            const contentEl = document.getElementById('slide-content');
-            
-            // Animation reset
-            titleEl.style.opacity = 0;
-            contentEl.style.opacity = 0;
-            
-            setTimeout(() => {
-                titleEl.textContent = slide.title;
-                contentEl.innerHTML = (slide.content || []).map(point => `<li>${point}</li>`).join('');
-                document.getElementById('slide-counter').textContent = `${currentSlideIndex + 1} / ${currentSlides.length}`;
-                
-                titleEl.style.transition = 'opacity 0.4s ease';
-                contentEl.style.transition = 'opacity 0.4s ease 0.1s';
-                titleEl.style.opacity = 1;
-                contentEl.style.opacity = 1;
-            }, 50);
-
-            // Update buttons & dots
-            document.getElementById('btn-prev-slide').disabled = currentSlideIndex === 0;
-            document.getElementById('btn-next-slide').disabled = currentSlideIndex === currentSlides.length - 1;
-            
-            document.querySelectorAll('.slide-dot').forEach((dot, idx) => {
-                if(idx === currentSlideIndex) {
-                    dot.classList.replace('bg-gray-600', 'bg-arxiv-red');
-                    dot.classList.replace('w-2', 'w-6');
-                } else {
-                    dot.classList.replace('bg-arxiv-red', 'bg-gray-600');
-                    dot.classList.replace('w-6', 'w-2');
-                }
-            });
-        }
-
-        function changeSlide(delta) {
-            const newIndex = currentSlideIndex + delta;
-            if (newIndex >= 0 && newIndex < currentSlides.length) {
-                currentSlideIndex = newIndex;
-                renderSlide();
-            }
-        }
-
-        function buildSlideDots() {
-            const container = document.getElementById('slide-dots');
-            container.innerHTML = '';
-            currentSlides.forEach((_, idx) => {
-                const dot = document.createElement('div');
-                dot.className = `slide-dot h-2 w-2 rounded-full bg-gray-600 transition-all duration-300 cursor-pointer`;
-                dot.onclick = () => { currentSlideIndex = idx; renderSlide(); };
-                container.appendChild(dot);
-            });
-        }
-
-        // --- ELI5 Generation ---
-        async function generateELI5() {
-            if (appState.currentDocIndex === -1) return;
-            
-            openModal('eli5-modal');
-            const loading = document.getElementById('eli5-loading');
-            const contentContainer = document.getElementById('eli5-content');
+            openModal('summary-modal');
+            const loading = document.getElementById('summary-loading');
+            const contentContainer = document.getElementById('summary-content');
             loading.classList.remove('hidden');
             contentContainer.innerHTML = '';
 
             try {
                 const docText = appState.documents[appState.currentDocIndex].text;
                 
-                const prompt = `Read the following research paper and explain its core concepts, findings, and purpose as if I am a 5-year-old child (ELI5). Use fun, simple analogies. Avoid all academic jargon. Format it nicely with markdown headings and bullet points where appropriate.\n\nDocument Text:\n${docText.substring(0, 100000)}`;
+                const prompt = `Read the following research paper and provide a generalized, professional summary of its core concepts, methodologies, and key findings. Use clear bullet points and appropriate headings. Avoid overly academic jargon where possible, but maintain a professional tone.\n\nDocument Text:\n${docText.substring(0, 100000)}`;
 
                 const payload = {
                     contents: [{ parts: [{ text: prompt }] }]
@@ -981,7 +719,7 @@ ${docText.substring(0, 100000)}`;
 
             } catch (err) {
                 console.error(err);
-                contentContainer.innerHTML = `<div class="text-red-500 flex flex-col items-center gap-2 pt-10"><i class="ph ph-warning-circle text-4xl"></i><p>Failed to generate ELI5 summary.</p><p class="text-xs text-gray-500">${err.message}</p></div>`;
+                contentContainer.innerHTML = `<div class="text-red-500 flex flex-col items-center gap-2 pt-10"><i class="ph ph-warning-circle text-4xl"></i><p>Failed to generate summary.</p><p class="text-xs text-gray-500">${err.message}</p></div>`;
             } finally {
                 loading.classList.add('hidden');
             }
@@ -1113,16 +851,8 @@ ${docText.substring(0, 100000)}`;
 
         // Global hotkeys for slides
         document.addEventListener('keydown', (e) => {
-            if (document.getElementById('presentation-modal').classList.contains('active')) {
-                if (e.key === 'ArrowRight') changeSlide(1);
-                if (e.key === 'ArrowLeft') changeSlide(-1);
-                if (e.key === 'Escape') closeModal('presentation-modal');
-            }
-            if (document.getElementById('mindmap-modal').classList.contains('active') && e.key === 'Escape') {
-                closeModal('mindmap-modal');
-            }
-            if (document.getElementById('eli5-modal').classList.contains('active') && e.key === 'Escape') {
-                closeModal('eli5-modal');
+            if (document.getElementById('summary-modal').classList.contains('active') && e.key === 'Escape') {
+                closeModal('summary-modal');
             }
             if (document.getElementById('quiz-modal').classList.contains('active') && e.key === 'Escape') {
                 closeModal('quiz-modal');
